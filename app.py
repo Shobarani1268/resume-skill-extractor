@@ -1,21 +1,28 @@
 import streamlit as st
-import pandas as pd
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 from PyPDF2 import PdfReader
 from docx import Document
+import re
 
-# Download required NLTK resources
-nltk.download('punkt')
-nltk.download('stopwords')
+# ---------------------------
+# Simple tokenizer & helpers
+# ---------------------------
+def simple_tokenize(text):
+    # Lowercase and split on whitespace and punctuation
+    # Keeps things safe and portable for deployment
+    text = text.lower()
+    # replace non-alphanumeric characters with space (keep + and # if you like)
+    text = re.sub(r'[^a-z0-9\+\#\s]', ' ', text)
+    tokens = [t for t in text.split() if t]
+    return tokens
 
-# Skill keywords
+# ---------------------------
+# Skill keywords (adjustable)
+# ---------------------------
 SKILL_KEYWORDS = {
-    "Python": ["python", "py"],
+    "Python": ["python"],
     "Java": ["java"],
-    "C": ["c programming"],
-    "C++": ["cpp", "c++"],
+    "C": ["c programming", "c "],
+    "C++": ["c++", "cpp"],
     "HTML": ["html"],
     "CSS": ["css"],
     "JavaScript": ["javascript", "js"],
@@ -24,58 +31,70 @@ SKILL_KEYWORDS = {
     "SQL": ["sql", "mysql"],
 }
 
+# ---------------------------
+# Extract text from uploads
+# ---------------------------
 def extract_text_from_pdf(file):
     reader = PdfReader(file)
     text = ""
     for page in reader.pages:
-        text += page.extract_text() + "\n"
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
     return text
 
 def extract_text_from_docx(file):
     doc = Document(file)
     return "\n".join([para.text for para in doc.paragraphs])
 
+# ---------------------------
+# Skill extraction logic
+# ---------------------------
 def extract_skills(text):
-    text = text.lower()
-    words = word_tokenize(text)
-
-    stop_words = set(stopwords.words("english"))
-    words = [w for w in words if w not in stop_words]
+    text_lower = text.lower()
+    tokens = simple_tokenize(text_lower)
 
     found_skills = []
-
     for skill, keywords in SKILL_KEYWORDS.items():
         for keyword in keywords:
-            if keyword.lower() in text:
-                found_skills.append(skill)
-                break
+            # for multi-word keywords use substring search
+            if " " in keyword:
+                if keyword in text_lower:
+                    found_skills.append(skill)
+                    break
+            else:
+                # single word: check token membership
+                if keyword in tokens:
+                    found_skills.append(skill)
+                    break
+    return sorted(set(found_skills))
 
-    return list(set(found_skills))
-
-# ------------------------------------------------------------
-# Streamlit Website UI
-# ------------------------------------------------------------
+# ---------------------------
+# Streamlit UI
+# ---------------------------
+st.set_page_config(page_title="Resume Skill Extractor", layout="centered")
 st.title("📄 Resume Skill Extractor")
-st.write("Upload your **PDF or DOCX resume** and extract your skills automatically!")
+st.write("Upload a PDF or DOCX resume to extract skills.")
 
-uploaded_file = st.file_uploader("Upload your Resume", type=["pdf", "docx"])
+uploaded_file = st.file_uploader("Upload resume", type=["pdf", "docx"])
 
 if uploaded_file:
-    st.success("✅ File uploaded successfully!")
-
-    # Read text
-    if uploaded_file.type == "application/pdf":
+    st.success("File uploaded")
+    # Extract text depending on type
+    if uploaded_file.type == "application/pdf" or uploaded_file.name.lower().endswith(".pdf"):
         resume_text = extract_text_from_pdf(uploaded_file)
     else:
         resume_text = extract_text_from_docx(uploaded_file)
 
-    st.subheader("📌 Extracted Skills:")
-    skills = extract_skills(resume_text)
-
-    if skills:
-        st.write(", ".join(skills))
+    if not resume_text or len(resume_text.strip()) < 10:
+        st.warning("Extracted very little text. If your resume is a scanned image PDF, OCR is required.")
     else:
-        st.write("No skills found 😕")
+        skills = extract_skills(resume_text)
+        st.subheader("📌 Extracted Skills")
+        if skills:
+            st.write(", ".join(skills))
+        else:
+            st.write("No skills detected. Try expanding SKILL_KEYWORDS in the code.")
 
-    st.subheader("📄 Extracted Text (Preview)")
-    st.text_area("Resume text:", resume_text[:2000])
+        st.subheader("📄 Resume text preview")
+        st.text_area("Preview", resume_text[:4000], height=200)
