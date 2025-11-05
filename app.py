@@ -41,7 +41,10 @@ def extract_text(file):
         text = ""
         with pdfplumber.open(file) as pdf:
             for page in pdf.pages:
-                t = page.extract_text()
+                try:
+                    t = page.extract_text()
+                except:
+                    t = ""
                 if t:
                     text += t + "\n"
         return text
@@ -56,7 +59,7 @@ def extract_text(file):
         return ""
 
 # -----------------------------------------------------------
-# ✅ Skills list (Expand anytime)
+# ✅ Skills list (expandable)
 # -----------------------------------------------------------
 SKILL_KEYWORDS = [
     "python", "java", "c", "c++", "html", "css", "javascript", "react", "node",
@@ -74,7 +77,7 @@ def extract_skills(text):
     return list(set(found))
 
 # -----------------------------------------------------------
-# ✅ Extract Education
+# ✅ ✅ FIXED — Extract Education
 # -----------------------------------------------------------
 def extract_education(text):
     patterns = [
@@ -88,10 +91,19 @@ def extract_education(text):
         r"(Intermediate|12th|HSC)",
         r"(10th|SSC)"
     ]
+
     found = []
+
     for p in patterns:
-        found.extend(re.findall(p, text, re.IGNORECASE))
-    return [x[0].title() for x in found]
+        matches = re.findall(p, text, re.IGNORECASE)
+
+        for m in matches:
+            if isinstance(m, tuple):
+                found.append(m[0].title())
+            else:
+                found.append(m.title())
+
+    return list(set(found))
 
 # -----------------------------------------------------------
 # ✅ Extract Experience
@@ -104,28 +116,36 @@ def extract_experience(text):
         r"(software engineer|developer|analyst|manager|designer)"
     ]
     found = []
+
     for p in patterns:
-        found.extend(re.findall(p, text, re.IGNORECASE))
-    return [x[0].title() if isinstance(x, tuple) else x.title() for x in found]
+        matches = re.findall(p, text, re.IGNORECASE)
+
+        for m in matches:
+            if isinstance(m, tuple):
+                found.append(m[0].title())
+            else:
+                found.append(m.title())
+
+    return list(set(found))
 
 # -----------------------------------------------------------
-# ✅ AI Resume Score (Simple Rule-based)
+# ✅ ATS Resume Score (Rule-based)
 # -----------------------------------------------------------
 def resume_score(skills, edu, exp, full_text):
     score = 0
 
-    # Skills weight
+    # Skills  
     score += len(skills) * 5
 
-    # Education weight
+    # Education
     if edu:
         score += 10
 
-    # Experience weight
+    # Experience
     if exp:
         score += 15
 
-    # Contact info ✅ FIXED LINE
+    # ✅ FIXED CONTACT REGEX
     contact = (
         bool(re.search(r"\b[\w\.-]+@[\w\.-]+\.\w{2,4}\b", full_text))
         and bool(re.search(r"\+?\d[\d\-\s]{7,}\d", full_text))
@@ -170,12 +190,12 @@ def match_job_role(skills):
 st.markdown("<div class='main-card'>", unsafe_allow_html=True)
 
 st.title("🧠 AI Resume Analyzer")
-st.write("Upload your resume and get Skills, Education, Experience, Missing Skills, ATS Score & Job Role Match.")
+st.write("Upload your resume to get Skills, Education, Experience, ATS Score, Job Match & Missing Skills.")
 
 uploaded_file = st.file_uploader("Upload Resume", type=["pdf", "docx", "txt"])
 
 if uploaded_file:
-    st.success("✅ File uploaded!")
+    st.success("✅ File uploaded successfully!")
 
     full_text = extract_text(uploaded_file)
 
@@ -202,7 +222,7 @@ if uploaded_file:
         st.success(f"⭐ Your Resume Score: **{score}/100**")
 
         st.subheader("✅ Job Role Match")
-        st.info(f"Best match: **{matched_role}**")
+        st.info(f"Best Match: **{matched_role}**")
 
         st.subheader("🚀 Missing Skills To Improve Your Resume")
         st.warning(missing)
